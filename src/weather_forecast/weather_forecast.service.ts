@@ -2,7 +2,6 @@ import { Body, ConsoleLogger, Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { json } from 'stream/consumers';
 import axios from 'axios';
-import { config } from 'process';
 
 @Injectable()
 export class WeatherForecastService {
@@ -13,7 +12,8 @@ export class WeatherForecastService {
       address +
       '.json?access_token=pk.eyJ1IjoiaGV0dmkxOCIsImEiOiJjbDNjeHoybmMwMm1nM2tsNXJtYmo3YmV0In0.jKczdsE7FBnxxMYN0pq0lA&limit=1';
 
-    axios({ method: 'get', url: url1, responseType: 'json' })
+    axios
+      .get(url1)
       .then((res) => {
         if (res.data.features.length === 0)
           callback('Unable to find loacation', undefined);
@@ -35,17 +35,21 @@ export class WeatherForecastService {
       ',' +
       long +
       '&units=f';
-    axios({ method: 'get', url: url, responseType: 'json' })
+    axios
+      .get(url)
       .then((res) => {
-        callback(
-          undefined,
-          'Current_Temperature:' +
-            res.data.current.temperature +
-            ',Current_Weather_description:' +
-            res.data.current.weather_descriptions +
-            ',Current_chances_to_Rain:' +
-            res.data.current.precip,
-        );
+        if (res.data.error) {
+          callback('Unable to find location', undefined);
+        } else
+          callback(
+            undefined,
+            'Current_Temperature:' +
+              res.data.current.temperature +
+              ',Current_Weather_description:' +
+              res.data.current.weather_descriptions +
+              ',Current_chances_to_Rain:' +
+              res.data.current.precip,
+          );
       })
       .catch((err) => {
         callback('Check Connection', undefined);
@@ -53,36 +57,30 @@ export class WeatherForecastService {
   }
 
   public getHomePage(address: string) {
-    if (!address) {
-      return { error: 'You must provide an address' };
-    }
-    this.geocode(
-      address,
-      (error: any, { latitude = 0, longitude = 0, location = {} } = {}) => {
-        if (error) {
-          return { error: error };
-        }
-
-        this.forecast(latitude, longitude, (error: any, datas: any) => {
+    return new Promise((resolve) => {
+      if (!address) {
+        return resolve({ error: 'You must provide an address' });
+      }
+      this.geocode(
+        address,
+        (error: any, { latitude = 0, longitude = 0, location = {} } = {}) => {
           if (error) {
-            return { error: error };
+            return resolve({ error });
           }
-          console.log({
-            location,
-            forecast: datas,
-            address: address,
+          this.forecast(latitude, longitude, (error: any, datas: any) => {
+            if (error) {
+              return resolve({ error });
+            }
+            return resolve({
+              location,
+              forecast: datas,
+              address: address,
+            });
           });
-          return {
-            location,
-            forecast: datas,
-            address: address,
-          };
-        });
-      },
-    );
-    //return { location: address };
-  }
-  public getHome() {
-    return 'About Me';
+        },
+      );
+    });
+
+    // return { location: address };
   }
 }
